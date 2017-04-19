@@ -8,6 +8,8 @@
 #include "ukf.h"
 #include "ground_truth_package.h"
 #include "measurement_package.h"
+#include "RadarUKFMeasurement.h"
+#include "LidarUKFMeasurement.h"
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -132,6 +134,30 @@ int main(int argc, char* argv[]) {
   // Create a UKF instance
   UKF ukf;
 
+  // Laser measurement noise standard deviation position1 in m
+  double std_laspx = 0.15;
+
+  // Laser measurement noise standard deviation position2 in m
+  double std_laspy = 0.15;
+
+  // Radar measurement noise standard deviation radius in m
+  double std_radr = 0.3;
+
+  // Radar measurement noise standard deviation angle in rad
+  double std_radphi = 0.03;
+
+  // Radar measurement noise standard deviation radius change in m/s
+  double std_radrd = 0.3;
+
+  // create measurement units
+  RadarUKFMeasurement radar(std_radr, std_radphi, std_radrd);
+  LidarUKFMeasurement lidar(std_laspx, std_laspy);
+
+  // add measurement units
+  ukf.AddUKFMeasurement(&radar, MeasurementPackage::RADAR);
+  ukf.AddUKFMeasurement(&lidar, MeasurementPackage::LASER);
+
+
   // used to compute the RMSE later
   vector<VectorXd> estimations;
   vector<VectorXd> ground_truth;
@@ -161,11 +187,13 @@ int main(int argc, char* argv[]) {
     ukf.ProcessMeasurement(measurement_pack_list[k]);
 
     // output the estimation
-    out_file_ << ukf.x_(0) << "\t"; // pos1 - est
-    out_file_ << ukf.x_(1) << "\t"; // pos2 - est
-    out_file_ << ukf.x_(2) << "\t"; // vel_abs -est
-    out_file_ << ukf.x_(3) << "\t"; // yaw_angle -est
-    out_file_ << ukf.x_(4) << "\t"; // yaw_rate -est
+    VectorXd x = ukf.getX();
+
+    out_file_ << x(0) << "\t"; // pos1 - est
+    out_file_ << x(1) << "\t"; // pos2 - est
+    out_file_ << x(2) << "\t"; // vel_abs -est
+    out_file_ << x(3) << "\t"; // yaw_angle -est
+    out_file_ << x(4) << "\t"; // yaw_rate -est
 
     // output the measurements
     if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::LASER) {
@@ -193,19 +221,19 @@ int main(int argc, char* argv[]) {
     // output the NIS values
     
     if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::LASER) {
-      out_file_ << ukf.NIS_laser_ << "\n";
+      out_file_ << ukf.NIS() << "\n";
     } else if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::RADAR) {
-      out_file_ << ukf.NIS_radar_ << "\n";
+      out_file_ << ukf.NIS() << "\n";
     }
 
 
     // convert ukf x vector to cartesian to compare to ground truth
     VectorXd ukf_x_cartesian_ = VectorXd(4);
 
-    float x_estimate_ = ukf.x_(0);
-    float y_estimate_ = ukf.x_(1);
-    float vx_estimate_ = ukf.x_(2) * cos(ukf.x_(3));
-    float vy_estimate_ = ukf.x_(2) * sin(ukf.x_(3));
+    float x_estimate_ = x(0);
+    float y_estimate_ = x(1);
+    float vx_estimate_ = x(2) * cos(x(3));
+    float vy_estimate_ = x(2) * sin(x(3));
     
     ukf_x_cartesian_ << x_estimate_, y_estimate_, vx_estimate_, vy_estimate_;
     
